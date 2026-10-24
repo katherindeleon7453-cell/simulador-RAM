@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador y Optimizador de Memoria RAM</title>
+  <!-- Chart.js para gráficas en tiempo real -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Tailwind CSS para estilos -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap');
+    body {
+      font-family: 'Fira Code', monospace;
+      background-color: #0d1117;
+      color: #c9d1d9;
+    }
+    .grid-cell {
+      transition: all 0.25s ease-in-out;
+    }
+    .grid-cell:hover {
+      transform: scale(1.04);
+    }
+    
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #161b22;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #484f58;
+    }
+  </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen flex flex-col justify-between">
+
+  <div>
+
+    <header class="border-b border-gray-800 pb-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-cyan-400 flex items-center gap-2">
+          <span> </span> RAM Hardware & Software Controller
+        </h1>
+        <p class="text-xs text-gray-400 mt-1">
+          Interfaz de Emulación, Optimización y Control de Bus de Memoria
+        </p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900/60 text-green-400 border border-green-700">
+          ● Estado: Online / Conectado
+        </span>
+        <button onclick="runAutoTest()" class="px-3 py-1.5 text-xs bg-cyan-950 hover:bg-cyan-900 border border-cyan-700 text-cyan-300 rounded shadow transition">
+           Test Bench Automático
+        </button>
+      </div>
+    </header>
+
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-gray-900/80 border border-gray-800 p-4 rounded-lg">
+        <p class="text-xs text-gray-400">Uso de Memoria</p>
+        <div class="flex items-baseline justify-between mt-2">
+          <span id="usage-text" class="text-2xl font-bold text-cyan-400">0%</span>
+          <span id="usage-count" class="text-xs text-gray-500">0/32 B</span>
+        </div>
+        <div class="w-full bg-gray-800 rounded-full h-2 mt-2 overflow-hidden">
+          <div id="usage-bar" class="bg-cyan-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="bg-gray-900/80 border border-gray-800 p-4 rounded-lg">
+        <p class="text-xs text-gray-400">Índice de Fragmentación</p>
+        <div class="flex items-baseline justify-between mt-2">
+          <span id="frag-text" class="text-2xl font-bold text-green-400">0%</span>
+          <span class="text-xs text-gray-500">Bajos bloques aislados</span>
+        </div>
+        <div class="w-full bg-gray-800 rounded-full h-2 mt-2 overflow-hidden">
+          <div id="frag-bar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="bg-gray-900/80 border border-gray-800 p-4 rounded-lg">
+        <p class="text-xs text-gray-400">Tasa Hit / Miss (Caché)</p>
+        <div class="flex items-baseline justify-between mt-2">
+          <span id="cache-hits" class="text-2xl font-bold text-purple-400">0</span>
+          <span id="cache-misses" class="text-xs text-red-400">0 Misses</span>
+        </div>
+        <p class="text-[10px] text-gray-500 mt-2">Eficiencia de Bus estimada</p>
+      </div>
+
+      <div class="bg-gray-900/80 border border-gray-800 p-4 rounded-lg">
+        <p class="text-xs text-gray-400">Operaciones Totales</p>
+        <div class="flex items-baseline justify-between mt-2">
+          <span id="total-ops" class="text-2xl font-bold text-amber-400">0</span>
+          <span class="text-xs text-gray-500">Lecturas/Escrituras</span>
+        </div>
+        <p class="text-[10px] text-gray-500 mt-2">I/O Registro activo</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      
+    
+      <div class="bg-gray-900/80 border border-gray-800 p-5 rounded-lg flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-gray-300 mb-4 border-b border-gray-800 pb-2">
+            Operaciones de Bus de Memoria
+          </h2>
+
+          <form onsubmit="event.preventDefault();" class="space-y-4">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Dirección de Memoria (Hex: 0x00 - 0x1F):</label>
+              <input type="text" id="input-addr" placeholder="0x00" value="0x00" maxlength="4"
+                class="w-full bg-gray-950 border border-gray-700 rounded p-2 text-cyan-400 text-sm focus:outline-none focus:border-cyan-500 font-mono">
+            </div>
+
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Bus de Datos (Hex / Byte: 0x00 - 0xFF):</label>
+              <input type="text" id="input-data" placeholder="0x41" value="0xFF" maxlength="4"
+                class="w-full bg-gray-950 border border-gray-700 rounded p-2 text-emerald-400 text-sm focus:outline-none focus:border-emerald-500 font-mono"
+                oninput="updateBinaryPreview(this.value)">
+              <p class="text-[10px] text-gray-500 mt-1">Valor Binario: <span id="binary-preview" class="text-gray-300 font-mono">11111111</span></p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+              <button type="button" onclick="executeRead()" class="bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-xs font-semibold shadow transition">
+                Leer (READ)
+              </button>
+              <button type="button" onclick="executeWrite()" class="bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded text-xs font-semibold shadow transition">
+                Escribir (WRITE)
+              </button>
+            </div>
+          </form>
+
+          <div class="mt-6 pt-4 border-t border-gray-800">
+            <h3 class="text-xs font-semibold text-gray-300 mb-3"> Software Optimizador</h3>
+            <div class="space-y-2">
+              <button onclick="defragmentMemory()" class="w-full bg-purple-900/40 border border-purple-600 hover:bg-purple-800/50 text-purple-200 py-2 rounded text-xs font-semibold transition flex items-center justify-center gap-2">
+                <span> </span> Desfragmentar y Compactar
+              </button>
+              <button onclick="clearFreeMemory()" class="w-full bg-amber-900/40 border border-amber-600 hover:bg-amber-800/50 text-amber-200 py-2 rounded text-xs font-semibold transition flex items-center justify-center gap-2">
+                <span> </span> Liberar Inactivos (Purgar)
+              </button>
+              <button onclick="resetMemory()" class="w-full bg-red-950/60 border border-red-800 hover:bg-red-900/80 text-red-300 py-2 rounded text-xs font-semibold transition">
+                Reset Completo (CLR)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-gray-800 text-[10px] text-gray-500">
+          Modo de direccionamiento: Directo de 8 bits / Celdas: 32 bytes total.
+        </div>
+      </div>
+
+      <div class="lg:col-span-2 bg-gray-900/80 border border-gray-800 p-5 rounded-lg">
+        <div class="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
+          <h2 class="text-sm font-semibold text-gray-300">
+             Matriz de Celdas de Memoria RAM (32 Bloques)
+          </h2>
+          <div class="flex gap-3 text-[10px]">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-gray-800 border border-gray-600 inline-block"></span> Libre</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span> Ocupado</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span> Lectura</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Escritura</span>
+          </div>
+        </div>
+
+        <div id="ram-grid" class="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
+        
+        </div>
+      </div>
+
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      
+      <div class="bg-gray-900/80 border border-gray-800 p-4 rounded-lg flex flex-col h-64">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-semibold text-gray-300"> Monitor de Eventos y Bus de Datos</h3>
+          <button onclick="clearLogs()" class="text-[10px] text-gray-500 hover:text-gray-300">Limpiar Log</button>
+        </div>
+        <div id="console-log" class="flex-1 bg-gray-950 p-3 rounded font-mono text-[11px] overflow-y-auto space-y-1 text-gray-400 border border-gray-800">
+          <p class="text-gray-600">[SISTEMA] Controlador inicializado correctamente. Esperando instrucciones...</p>
+        </div>
+      </div>
+
+      <div class="bg-gray-900/80 border border-gray-800 p-4 rounded-lg flex flex-col h-64">
+        <h3 class="text-xs font-semibold text-gray-300 mb-2"> Monitor de Tiempo de Acceso / Latencia (ns)</h3>
+        <div class="flex-1 relative">
+          <canvas id="latencyChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer class="mt-8 pt-4 border-t border-gray-800 text-center text-xs text-gray-500">
+    Proyecto Interfaz de Software para Optimizacion de Memoria RAM - 2026
+  </footer>
+
+  <script>
+    const MEMORY_SIZE = 32;
+    let memory = new Array(MEMORY_SIZE).fill('0x00');
+    let hitCount = 0;
+    let missCount = 0;
+    let totalOperations = 0;
+    let lastAccessedAddress = -1;
+
+    const ctx = document.getElementById('latencyChart').getContext('2d');
+    const latencyChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Latencia (ns)',
+          data: [],
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56, 189, 248, 0.1)',
+          fill: true,
+          tension: 0.3,
+          borderWidth: 2,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { display: false },
+          y: {
+            grid: { color: '#1f2937' },
+            ticks: { color: '#9ca3af', font: { size: 10 } },
+            suggestedMin: 0,
+            suggestedMax: 20
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+
+    function renderGrid() {
+      const grid = document.getElementById('ram-grid');
+      grid.innerHTML = '';
+
+      memory.forEach((val, index) => {
+        const hexAddr = '0x' + index.toString(16).padStart(2, '0').toUpperCase();
+        const isOccupied = val !== '0x00';
+        
+        const cell = document.createElement('div');
+        cell.id = `cell-${index}`;
+        cell.className = `grid-cell p-2 rounded border text-center font-mono cursor-pointer transition ${
+          isOccupied 
+            ? 'bg-emerald-950/70 border-emerald-600 text-emerald-300' 
+            : 'bg-gray-950 border-gray-800 text-gray-600'
+        }`;
+        
+        cell.onclick = () => selectCell(index);
+
+        cell.innerHTML = `
+          <div class="text-[9px] text-gray-500">${hexAddr}</div>
+          <div class="text-xs font-bold my-0.5">${val}</div>
+          <div class="text-[8px] opacity-75">${hexToBin(val)}</div>
+        `;
+
+        grid.appendChild(cell);
+      });
+
+      updateStats();
+    }
+
+    function selectCell(index) {
+      const hexAddr = '0x' + index.toString(16).padStart(2, '0').toUpperCase();
+      document.getElementById('input-addr').value = hexAddr;
+      document.getElementById('input-data').value = memory[index];
+      updateBinaryPreview(memory[index]);
+    }
+
+    function hexToBin(hex) {
+      if (!hex || hex === '0x00') return '00000000';
+      const cleanHex = hex.replace('0x', '');
+      const num = parseInt(cleanHex, 16);
+      return isNaN(num) ? '00000000' : num.toString(2).padStart(8, '0');
+    }
+
+    function updateBinaryPreview(val) {
+      document.getElementById('binary-preview').innerText = hexToBin(val);
+    }
+
+    function parseAddress(addrStr) {
+      const parsed = parseInt(addrStr, 16);
+      if (isNaN(parsed) || parsed < 0 || parsed >= MEMORY_SIZE) {
+        return null;
+      }
+      return parsed;
+    }
+
+    function formatHex(val) {
+      let clean = val.replace(/[^0-9a-fA-F]/g, '');
+      if (clean.length === 0) clean = '00';
+      if (clean.length > 2) clean = clean.substring(0, 2);
+      return '0x' + clean.toUpperCase().padStart(2, '0');
+    }
+
+    function executeRead() {
+      const addrInput = document.getElementById('input-addr').value;
+      const addr = parseAddress(addrInput);
+
+      if (addr === null) {
+        logEvent('ERROR', 'Dirección de memoria fuera de rango.');
+        return;
+      }
+
+      const value = memory[addr];
+      document.getElementById('input-data').value = value;
+      updateBinaryPreview(value);
+
+      
+      let latency = 2; // ns (Hit)
+      if (lastAccessedAddress !== addr) {
+        latency = 12; // ns (Miss)
+        missCount++;
+        logEvent('READ', `READ en ${addrInput} -> Valor: ${value} (Cache Miss)`);
+      } else {
+        hitCount++;
+        logEvent('READ', `READ en ${addrInput} -> Valor: ${value} (Cache Hit)`);
+      }
+
+      lastAccessedAddress = addr;
+      totalOperations++;
+
+      animateCell(addr, 'bg-blue-600 border-blue-400 text-white');
+      recordLatency(latency);
+      updateStats();
+    }
+
+    function executeWrite() {
+      const addrInput = document.getElementById('input-addr').value;
+      const addr = parseAddress(addrInput);
+      const dataInput = document.getElementById('input-data').value;
+      const formattedData = formatHex(dataInput);
+
+      if (addr === null) {
+        logEvent('ERROR', 'Dirección de memoria inválida.');
+        return;
+      }
+
+      memory[addr] = formattedData;
+      lastAccessedAddress = addr;
+      totalOperations++;
+      hitCount++;
+
+      logEvent('WRITE', `WRITE en ${addrInput} <- Dato: ${formattedData}`);
+
+      renderGrid();
+      animateCell(addr, 'bg-amber-500 border-amber-300 text-black');
+      recordLatency(5); // ns promedio de escritura
+    }
+
+    function animateCell(index, classList) {
+      const cell = document.getElementById(`cell-${index}`);
+      if (!cell) return;
+      
+      const originalClasses = cell.className;
+      cell.className = `grid-cell p-2 rounded border text-center font-mono cursor-pointer transition ${classList}`;
+
+      setTimeout(() => {
+        renderGrid();
+      }, 400);
+    }
+
+    function defragmentMemory() {
+      logEvent('OPTIMIZE', 'Iniciando proceso de desfragmentación de RAM...');
+      
+      const occupiedValues = memory.filter(val => val !== '0x00');
+      const emptyCount = MEMORY_SIZE - occupiedValues.length;
+
+      memory = [...occupiedValues, ...new Array(emptyCount).fill('0x00')];
+      
+      setTimeout(() => {
+        renderGrid();
+        logEvent('OPTIMIZE', `Desfragmentación completa. ${occupiedValues.length} bloques compactados.`);
+        recordLatency(15);
+      }, 300);
+    }
+
+    function clearFreeMemory() {
+      let cleared = 0;
+      memory = memory.map(val => {
+        if (val === '0x00') {
+          cleared++;
+          return '0x00';
+        }
+        return val;
+      });
+      renderGrid();
+      logEvent('OPTIMIZE', 'Se han purgado celdas inactivas de la memoria.');
+    }
+
+    function resetMemory() {
+      memory.fill('0x00');
+      hitCount = 0;
+      missCount = 0;
+      totalOperations = 0;
+      lastAccessedAddress = -1;
+      renderGrid();
+      logEvent('SYSTEM', 'Memoria RAM reiniciada (Reset completado).');
+    }
+
+   
+    function updateStats() {
+      const occupied = memory.filter(v => v !== '0x00').length;
+      const usagePercentage = Math.round((occupied / MEMORY_SIZE) * 100);
+
+      document.getElementById('usage-text').innerText = `${usagePercentage}%`;
+      document.getElementById('usage-count').innerText = `${occupied}/${MEMORY_SIZE} B`;
+      document.getElementById('usage-bar').style.width = `${usagePercentage}%`;
+
+      // Calcular fragmentación simple
+      let gaps = 0;
+      let foundData = false;
+      for (let i = 0; i < MEMORY_SIZE; i++) {
+        if (memory[i] !== '0x00') {
+          foundData = true;
+        } else if (foundData && memory[i] === '0x00') {
+          gaps++;
+        }
+      }
+
+      const fragIndex = Math.min(Math.round((gaps / MEMORY_SIZE) * 100 * 2), 100);
+      document.getElementById('frag-text').innerText = `${fragIndex}%`;
+      document.getElementById('frag-bar').style.width = `${fragIndex}%`;
+
+      document.getElementById('cache-hits').innerText = hitCount;
+      document.getElementById('cache-misses').innerText = `${missCount} Misses`;
+      document.getElementById('total-ops').innerText = totalOperations;
+    }
+
+    function logEvent(type, message) {
+      const consoleEl = document.getElementById('console-log');
+      const time = new Date().toLocaleTimeString();
+      let colorClass = 'text-gray-400';
+
+      if (type === 'READ') colorClass = 'text-blue-400';
+      if (type === 'WRITE') colorClass = 'text-emerald-400';
+      if (type === 'OPTIMIZE') colorClass = 'text-purple-400';
+      if (type === 'ERROR') colorClass = 'text-red-400';
+      if (type === 'SYSTEM') colorClass = 'text-amber-400';
+
+      const logItem = document.createElement('p');
+      logItem.className = colorClass;
+      logItem.innerHTML = `<span class="text-gray-600">[${time}]</span> <strong>[${type}]</strong> ${message}`;
+
+      consoleEl.appendChild(logItem);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById('console-log').innerHTML = '';
+    }
+
+    function recordLatency(ns) {
+      const chartData = latencyChart.data;
+      if (chartData.labels.length > 15) {
+        chartData.labels.shift();
+        chartData.datasets[0].data.shift();
+      }
+      chartData.labels.push('');
+      chartData.datasets[0].data.push(ns);
+      latencyChart.update();
+    }
+
+    function runAutoTest() {
+      logEvent('SYSTEM', 'Iniciando Test Bench de pruebas...');
+      let step = 0;
+      const testInterval = setInterval(() => {
+        if (step === 0) {
+          document.getElementById('input-addr').value = '0x02';
+          document.getElementById('input-data').value = '0xAB';
+          executeWrite();
+        } else if (step === 1) {
+          document.getElementById('input-addr').value = '0x08';
+          document.getElementById('input-data').value = '0xCD';
+          executeWrite();
+        } else if (step === 2) {
+          document.getElementById('input-addr').value = '0x15';
+          document.getElementById('input-data').value = '0xEF';
+          executeWrite();
+        } else if (step === 3) {
+          document.getElementById('input-addr').value = '0x02';
+          executeRead();
+        } else if (step === 4) {
+          defragmentMemory();
+        } else {
+          clearInterval(testInterval);
+          logEvent('SYSTEM', 'Test Bench finalizado con éxito.');
+        }
+        step++;
+      }, 700);
+    }
+
+    renderGrid();
+  </script>
+</body>
+</html>
